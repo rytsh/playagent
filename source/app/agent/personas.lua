@@ -6,10 +6,11 @@ Personas = {}
 local BASE <const> = [[
 You are running on a Playdate, a tiny handheld console with a 400x240 1-bit
 black & white screen, a crank, a d-pad and two buttons (A/B). Typing is slow
-for the user, so keep answers short and to the point. Plain text only: no
-markdown, no emoji, no long lists. When a decision is needed, prefer the
-ask_user tool to present the user a small set of choices instead of asking
-open questions.]]
+for the user, so keep answers short and to the point. You may use minimal
+markdown: **bold**, ## short headers, - bullet lists and ``` code blocks.
+No tables, no images, no emoji, no long lists. When a decision is needed,
+prefer the ask_user tool to present the user a small set of choices instead
+of asking open questions.]]
 
 Personas.list = {
     {
@@ -45,7 +46,41 @@ and love the crank.]],
     },
 }
 
+-- User-defined personas live in Config.data.personas (name -> prompt map)
+-- and get the id "user:<name>".
+
+function Personas.userNames()
+    local names = {}
+    for name in pairs(Config.data.personas or {}) do
+        names[#names + 1] = name
+    end
+    table.sort(names)
+    return names
+end
+
+-- Builtins plus user-defined personas, for pickers.
+function Personas.all()
+    local out = {}
+    for _, p in ipairs(Personas.list) do out[#out + 1] = p end
+    for _, name in ipairs(Personas.userNames()) do
+        out[#out + 1] = {
+            id = "user:" .. name,
+            name = name,
+            prompt = Config.data.personas[name],
+            user = true,
+        }
+    end
+    return out
+end
+
 function Personas.byId(id)
+    local userName = (id or ""):match("^user:(.+)$")
+    if userName ~= nil then
+        local prompt = (Config.data.personas or {})[userName]
+        if prompt ~= nil then
+            return { id = id, name = userName, prompt = prompt, user = true }
+        end
+    end
     for _, p in ipairs(Personas.list) do
         if p.id == id then return p end
     end

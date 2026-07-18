@@ -23,6 +23,11 @@ clean:
 provision:
 	python3 tools/provision.py $(ARGS)
 
+# Receive the config FROM the Playdate (Settings -> Export config (Wi-Fi)).
+.PHONY: receive-config
+receive-config:
+	python3 tools/provision.py --receive $(ARGS)
+
 # Regenerate launcher art (icon, card, launch image)
 .PHONY: assets
 assets:

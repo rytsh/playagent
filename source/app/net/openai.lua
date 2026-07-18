@@ -6,7 +6,9 @@ OpenAI = {}
 
 -- messages: OpenAI-format message array
 -- tools: OpenAI-format tool definition array (or nil)
--- callback(message, err): message = choices[1].message on success
+-- callback(message, err, usage): message = choices[1].message on success;
+-- usage = the response "usage" table (prompt/completion/total tokens) if
+-- the server reported one
 function OpenAI.chat(messages, tools, callback)
     local c = Config.data.api
     local payload = {
@@ -44,7 +46,7 @@ function OpenAI.chat(messages, tools, callback)
                 callback(nil, "unexpected response from LLM")
                 return
             end
-            callback(data.choices[1].message, nil)
+            callback(data.choices[1].message, nil, data.usage)
         end,
     })
 end

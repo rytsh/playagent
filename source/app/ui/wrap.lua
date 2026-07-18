@@ -12,7 +12,7 @@ local function characterStart(text, pos)
 end
 
 function TextWrap.truncate(font, text, maxWidth)
-    text = tostring(text or "")
+    text = Emoji.filter(text)
     if maxWidth <= 0 then return "" end
     if font:getTextWidth(text) <= maxWidth then return text end
 
@@ -30,7 +30,7 @@ end
 -- Returns an array of lines. Handles \n and splits over-long words.
 function TextWrap.wrap(font, text, maxWidth)
     local lines = {}
-    text = tostring(text or "")
+    text = Emoji.filter(text)
     for paragraph in (text .. "\n"):gmatch("(.-)\n") do
         if #paragraph == 0 then
             lines[#lines + 1] = ""

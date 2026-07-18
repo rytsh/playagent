@@ -124,6 +124,13 @@ function ChatScene.new(session)
                 cb(label or "(no answer)")
             end, false)
         end,
+        onConfirm = function(question, cb)
+            self.modal = ChoiceDialog.new(question, { "Allow", "Reject" },
+                function(idx)
+                    self.modal = nil
+                    cb(idx == 1)
+                end, false)
+        end,
         onDone = function(err)
             self.status = nil
             if err ~= nil then
@@ -175,18 +182,55 @@ function ChatScene:maybeIntro()
     end
 end
 
+function ChatScene:statsText()
+    local frac, tokens = Agent.contextFraction(self.session)
+    local exact = self.session.lastUsage ~= nil
+    local ctx = (exact and "" or "~") .. tostring(tokens) .. " tokens"
+    if frac ~= nil then
+        ctx = ctx .. string.format(" (%d%% of %d)",
+            math.floor(frac * 100 + 0.5), Config.data.api.contextTokens)
+    end
+    return "Session stats\n"
+        .. "Messages: " .. #self.session.messages .. "\n"
+        .. "Context: " .. ctx .. "\n"
+        .. "Total used: " .. tostring(self.session.totalTokens or 0)
+        .. " tokens\n"
+        .. "Model: " .. Config.data.api.model .. "\n"
+        .. "Persona: " .. Personas.byId(self.session.personaId).name
+end
+
 function ChatScene:openActionMenu()
-    local options = { "Type message", "Speak (mic)" }
+    local options = { "Type message", "Speak (mic)", "Dictate (live)" }
     local hasPrompts = false
     for _, client in pairs(Mcp.clients) do
         if #client.prompts > 0 then hasPrompts = true end
     end
     if hasPrompts then options[#options + 1] = "MCP prompts" end
+    options[#options + 1] = "Stats"
+    options[#options + 1] = "Compact session"
 
     self.modal = ChoiceDialog.new("What do you want to do?", options,
         function(idx, label)
             self.modal = nil
-            if label == "Type message" then
+            if label == "Stats" then
+                self.modal = ChoiceDialog.new(self:statsText(), { "OK" },
+                    function() self.modal = nil end, true)
+            elseif label == "Compact session" then
+                if #self.session.messages <= 3 then
+                    self:flash("Nothing to compact yet.")
+                    return
+                end
+                self.agent:compact(function(err)
+                    self.status = nil
+                    if err ~= nil then
+                        self:flash("Compact: " .. tostring(err))
+                    else
+                        self:flash("Session compacted.")
+                    end
+                    self.view:invalidate()
+                    self.view:scrollToBottom()
+                end)
+            elseif label == "Type message" then
                 TextInput.show("Message:", "", function(text)
                     if text ~= nil and #text > 0 then
                         self:send(text)
@@ -207,6 +251,15 @@ function ChatScene:openActionMenu()
                                 self:send(text)
                             end
                         end)
+                    end
+                end)
+            elseif label == "Dictate (live)" then
+                self.modal = LiveMic.new(function(text, err)
+                    self.modal = nil
+                    if err ~= nil then
+                        self:flash("Mic: " .. err)
+                    elseif text ~= nil and #text > 0 then
+                        self:send(text)
                     end
                 end)
             elseif label == "MCP prompts" then
@@ -297,6 +350,15 @@ function ChatScene:update()
     end
     if statusLine == nil and not self.agent.busy then
         statusLine = "A: talk    B: back    crank: scroll"
+        local frac = Agent.contextFraction(self.session)
+        if frac ~= nil and #self.session.messages > 1 then
+            local pct = math.floor(frac * 100 + 0.5)
+            if frac >= 0.7 then
+                statusLine = "A: talk  B: back  ctx " .. pct .. "% - compact?"
+            else
+                statusLine = "A: talk  B: back  ctx " .. pct .. "%"
+            end
+        end
     end
 
     self.view:update(statusLine)
@@ -509,12 +571,62 @@ PersonaScene.__index = PersonaScene
 
 function PersonaScene.new()
     local self = setmetatable({}, PersonaScene)
-    local items = {}
-    for _, p in ipairs(Personas.list) do
-        items[#items + 1] = { text = p.name, id = p.id }
-    end
-    self.list = ListView.new(items)
+    self.list = ListView.new({})
+    self.modal = nil
     return self
+end
+
+function PersonaScene:refresh()
+    local items = {}
+    for _, p in ipairs(Personas.all()) do
+        items[#items + 1] = { text = p.name, id = p.id, user = p.user }
+    end
+    items[#items + 1] = { text = "+ Add persona", add = true }
+    self.list:setItems(items)
+end
+
+function PersonaScene:enter()
+    self:refresh()
+end
+
+function PersonaScene:addPersonaFlow(name)
+    TextInput.show("Persona name:", name or "", function(pname)
+        if pname == nil or #pname == 0 then return end
+        TextInput.show("Persona prompt:", Config.data.personas[pname] or "",
+            function(prompt)
+                if prompt == nil or #prompt == 0 then return end
+                Config.setPersona(pname, prompt)
+                self:refresh()
+            end)
+    end)
+end
+
+function PersonaScene:userPersonaMenu(item)
+    local name = item.text
+    self.modal = ChoiceDialog.new(name, { "Use", "Edit prompt", "Delete" },
+        function(_, label)
+            self.modal = nil
+            if label == "Use" then
+                Config.data.personaId = item.id
+                Config.save()
+            elseif label == "Edit prompt" then
+                TextInput.show("Prompt for " .. name .. ":",
+                    Config.data.personas[name] or "", function(prompt)
+                        if prompt ~= nil and #prompt > 0 then
+                            Config.setPersona(name, prompt)
+                        end
+                    end)
+            elseif label == "Delete" then
+                self.modal = ChoiceDialog.new('Delete persona "' .. name .. '"?',
+                    { "Delete", "Cancel" }, function(_, l2)
+                        self.modal = nil
+                        if l2 == "Delete" then
+                            Config.removePersona(name)
+                            self:refresh()
+                        end
+                    end, true)
+            end
+        end, true)
 end
 
 function PersonaScene:update()
@@ -524,14 +636,25 @@ function PersonaScene:update()
     end
     drawTitle("Persona")
 
+    if self.modal ~= nil then
+        if not self.modal:update() then self.modal = nil end
+        return
+    end
+
     for i, item in ipairs(self.list.items) do
-        item.detail = (item.id == Config.data.personaId) and "*" or nil
+        if not item.add then
+            item.detail = (item.id == Config.data.personaId) and "*" or nil
+        end
     end
 
     if self.list:handleInput() then
         local item = self.list:current()
         if item ~= nil then
-            if item.id == "custom" then
+            if item.add then
+                self:addPersonaFlow()
+            elseif item.user then
+                self:userPersonaMenu(item)
+            elseif item.id == "custom" then
                 TextInput.show("Describe the agent:", Config.data.customPersona or "",
                     function(text)
                         if text ~= nil and #text > 0 then
@@ -580,6 +703,7 @@ function SettingsScene:refresh()
     local s = Config.data.stt
     self.list:setItems({
         { text = "Import config (Wi-Fi)", detail = ">", key = "import" },
+        { text = "Export config (Wi-Fi)", detail = ">", key = "export" },
         { text = "API host", detail = a.host, key = "host" },
         { text = "API port", detail = tostring(a.port), key = "port" },
         { text = "HTTPS", detail = a.ssl and "on" or "off", key = "ssl" },
@@ -587,6 +711,11 @@ function SettingsScene:refresh()
         { text = "API key", detail = maskKey(a.key), key = "key" },
         { text = "Model", detail = a.model, key = "model" },
         { text = "STT model", detail = s.model, key = "sttModel" },
+        { text = "STT host", detail = (#(s.host or "") > 0) and s.host or "(same as API)", key = "sttHost" },
+        { text = "STT port", detail = tostring(s.port or 8000), key = "sttPort" },
+        { text = "STT HTTPS", detail = s.ssl and "on" or "off", key = "sttSsl" },
+        { text = "STT base path", detail = s.basePath or "/v1", key = "sttBase" },
+        { text = "STT key", detail = maskKey(s.key), key = "sttKey" },
         { text = "STT language", detail = (#(s.language or "") > 0) and s.language or "auto", key = "sttLang" },
         { text = "Max record sec", detail = tostring(s.maxSeconds), key = "sttSec" },
     })
@@ -608,8 +737,17 @@ function SettingsScene:edit(item)
         done()
         return
     end
+    if item.key == "sttSsl" then
+        s.ssl = not s.ssl
+        done()
+        return
+    end
     if item.key == "import" then
         self:importConfig()
+        return
+    end
+    if item.key == "export" then
+        self:exportConfig()
         return
     end
     local prompts = {
@@ -619,6 +757,10 @@ function SettingsScene:edit(item)
         key = { "API key:", a.key, function(v) a.key = v end },
         model = { "Model:", a.model, function(v) a.model = v end },
         sttModel = { "STT model:", s.model, function(v) s.model = v end },
+        sttHost = { "STT host (empty = same as API):", s.host or "", function(v) s.host = v end, true },
+        sttPort = { "STT port:", tostring(s.port or 8000), function(v) s.port = tonumber(v) or s.port end },
+        sttBase = { "STT base path:", s.basePath or "/v1", function(v) s.basePath = v end },
+        sttKey = { "STT key (empty = no auth):", s.key or "", function(v) s.key = v end, true },
         sttLang = { "STT language (ISO code or empty):", s.language or "", function(v) s.language = v end, true },
         sttSec = { "Max record seconds:", tostring(s.maxSeconds), function(v) s.maxSeconds = math.max(2, math.min(30, tonumber(v) or s.maxSeconds)) end },
     }
@@ -687,6 +829,53 @@ function SettingsScene:fetchConfig(address, pin)
             else
                 self.info = "Imported: " .. summary
                 self:refresh()
+            end
+        end,
+    })
+end
+
+-- Push the device configuration to tools/provision.py --receive on the PC.
+-- The mirror image of importConfig: the Playdate can only make outgoing
+-- requests, so the device POSTs and the PC listens.
+function SettingsScene:exportConfig()
+    TextInput.show("PC address (ip or ip:port):", Config.data.provisionHost or "",
+        function(text)
+            if text == nil or #text == 0 then return end
+            Config.data.provisionHost = text
+            Config.save()
+            TextInput.show("PIN (shown by provision.py):", "", function(pin)
+                if pin == nil then return end
+                self:pushConfig(text, pin)
+            end)
+        end)
+end
+
+function SettingsScene:pushConfig(address, pin)
+    local host, port = address:match("^([^:]+):(%d+)$")
+    if host == nil then
+        host = address
+        port = "9393"
+    end
+    local headers = { ["Content-Type"] = "application/json" }
+    if pin ~= nil and #pin > 0 then
+        headers["Authorization"] = "Basic " .. Base64.encode("playagent:" .. pin)
+    end
+    self.info = "Sending to " .. host .. ":" .. port .. "..."
+    Http.request({
+        host = host,
+        port = tonumber(port),
+        ssl = false,
+        method = "POST",
+        path = "/config",
+        headers = headers,
+        body = json.encode(Config.data),
+        callback = function(resp)
+            if resp.status == 401 then
+                self.info = "Failed: wrong PIN"
+            elseif not resp.ok or resp.status ~= 200 then
+                self.info = "Failed: " .. (resp.error or ("HTTP " .. tostring(resp.status)))
+            else
+                self.info = "Config exported."
             end
         end,
     })

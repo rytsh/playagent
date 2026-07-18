@@ -392,7 +392,7 @@ function RemoteChatScene:sendPrompt(text)
 end
 
 function RemoteChatScene:openActionMenu()
-    local options = { "Type prompt", "Speak (mic)", "Commands", "Agent", "Todos", "Abort" }
+    local options = { "Type prompt", "Speak (mic)", "Dictate (live)", "Commands", "Agent", "Todos", "Abort" }
     self.modal = ChoiceDialog.new("Session: " .. truncate(self.session.title or self.session.id, 40),
         options,
         function(_, label)
@@ -416,6 +416,15 @@ function RemoteChatScene:openActionMenu()
                                 self:sendPrompt(text)
                             end
                         end)
+                    end
+                end)
+            elseif label == "Dictate (live)" then
+                self.modal = LiveMic.new(function(text, err)
+                    self.modal = nil
+                    if err ~= nil then
+                        self:flash("Mic: " .. err)
+                    elseif text ~= nil and #text > 0 then
+                        self:sendPrompt(text)
                     end
                 end)
             elseif label == "Commands" then

@@ -10,7 +10,16 @@
   "stt": {
     "model": "whisper-1",
     "maxSeconds": 15,
-    "language": ""
+    "language": "",
+    "host": "",
+    "port": 8000,
+    "ssl": false,
+    "basePath": "/v1",
+    "key": "",
+    "chunkSeconds": 3,
+    "minChunkSeconds": 1.2,
+    "silenceMs": 350,
+    "levelThreshold": 0.02
   },
   "mcpServers": [
     {

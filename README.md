@@ -13,12 +13,36 @@ An LLM agent that runs entirely on your [Playdate](https://play.date).
   similar to opencode's "asking".
 - **Speech-to-text** — hold a conversation without typing: record with the
   Playdate microphone, transcription via a Whisper-compatible
-  `/audio/transcriptions` endpoint.
+  `/audio/transcriptions` endpoint. **Dictate (live)** transcribes *while*
+  you speak: speech is chunked at pauses, uploaded in the background and the
+  transcript accumulates on screen (~1.5-3s behind your voice; a local
+  faster-whisper/whisper.cpp server on the LAN gives the lowest latency).
+  STT can use its **own endpoint** (Settings → *STT host/port/...*), so the
+  chat LLM and the Whisper server can live on different machines — leave
+  *STT host* empty to reuse the chat API endpoint.
+
+  Tips for a local server (e.g. [speaches](https://speaches.ai)/faster-whisper
+  with a model like `Systran/faster-whisper-small`): set **STT language**
+  (e.g. `tr`) — per-chunk language auto-detection is slow and error-prone on
+  short clips; live dictation also passes the transcript tail as the Whisper
+  `prompt` so chunks join up cleanly.
 - **Sessions** — create, resume and delete chat sessions; everything is
   persisted on the device.
 - **Personas** — pick who the agent is (assistant, game master, retro robot,
   your own custom description) or choose **Self-determined** and let the agent
-  invent its own identity at the start of every session.
+  invent its own identity at the start of every session. You can also create
+  any number of **named personas** on the device — or simply ask the agent to
+  do it: the `add_persona` / `remove_persona` tools let the LLM manage them,
+  always behind an on-screen **Allow / Reject** confirmation.
+- **Markdown-lite chat rendering** — headers and whole-line bold render in
+  bold, lists get hanging indents, code blocks a left rule; inline markers
+  are cleaned up. Emoji (which the 1-bit bitmap font can't show) degrade
+  gracefully: common ones become ASCII (`:)`, `<3`, `+1`, `✓`), the rest are
+  stripped.
+- **Token stats & compaction** — the real `usage` numbers from each reply
+  drive a context meter in the chat status bar; a **Stats** dialog shows
+  tokens/messages, and **Compact session** summarizes the transcript into a
+  fresh, small context when it fills up.
 - **Built-in device tools** — `device_status` gives the model access to
   battery level, local time and the crank position.
 - **Remote-control opencode** — attach to an [opencode](https://opencode.ai)
@@ -120,6 +144,17 @@ and the server exits. The address is remembered for next time.
 > run — or fix it with `--password`, disable with `--no-auth`). The payload
 > still travels as plain HTTP on your LAN, so use a trusted network.
 > `--forever` keeps the server running for repeated imports.
+
+The reverse direction works too — back up the device configuration to the
+PC:
+
+```sh
+make receive-config     # provision.py --receive: waits for the device
+```
+
+then on the Playdate: **Settings → Export config (Wi-Fi)**. The config is
+POSTed to the PC and written to `tools/playagent-config.json` (an existing
+file is kept as `.bak`).
 
 #### Running under WSL?
 

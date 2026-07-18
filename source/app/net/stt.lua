@@ -20,16 +20,44 @@ local function readWholeFile(path)
     return table.concat(chunks), nil
 end
 
+-- Resolve the endpoint: a dedicated STT server when stt.host is set,
+-- otherwise the chat API endpoint. Returns { host, port, ssl, basePath, key }.
+function STT.endpoint()
+    local s = Config.data.stt
+    if s.host ~= nil and #s.host > 0 then
+        return {
+            host = s.host,
+            port = s.port or (s.ssl and 443 or 80),
+            ssl = s.ssl == true,
+            basePath = (s.basePath ~= nil and #s.basePath > 0) and s.basePath or "/v1",
+            -- deliberately NOT falling back to api.key: don't leak the LLM
+            -- key to a different (usually local, auth-less) server
+            key = s.key or "",
+        }
+    end
+    local a = Config.data.api
+    return {
+        host = a.host,
+        port = a.port,
+        ssl = a.ssl,
+        basePath = a.basePath or "/v1",
+        key = a.key or "",
+    }
+end
+
 -- wavPath: file in the game's Data directory (e.g. "rec.wav")
 -- callback(text, err)
-function STT.transcribe(wavPath, callback)
+-- contextPrompt (optional): passed as the Whisper "prompt" field; live
+-- dictation sends the tail of the transcript so far, which keeps chunk
+-- boundaries coherent (spelling, casing, continuation).
+function STT.transcribe(wavPath, callback, contextPrompt)
     local wav, ferr = readWholeFile(wavPath)
     if wav == nil then
         callback(nil, ferr)
         return
     end
 
-    local c = Config.data.api
+    local c = STT.endpoint()
     local sttModel = Config.data.stt.model or "whisper-1"
     local secs = playdate.getSecondsSinceEpoch()
     local boundary = "----PlayAgentBoundary" .. tostring(secs)
@@ -44,22 +72,29 @@ function STT.transcribe(wavPath, callback)
     if Config.data.stt.language ~= nil and #Config.data.stt.language > 0 then
         field("language", Config.data.stt.language)
     end
+    if contextPrompt ~= nil and #contextPrompt > 0 then
+        field("prompt", contextPrompt)
+    end
     parts[#parts + 1] = "--" .. boundary .. "\r\n"
         .. 'Content-Disposition: form-data; name="file"; filename="rec.wav"\r\n'
         .. "Content-Type: audio/wav\r\n\r\n"
     parts[#parts + 1] = wav
     parts[#parts + 1] = "\r\n--" .. boundary .. "--\r\n"
 
+    local headers = {
+        ["Content-Type"] = "multipart/form-data; boundary=" .. boundary,
+    }
+    if #c.key > 0 then
+        headers["Authorization"] = "Bearer " .. c.key
+    end
+
     Http.request({
         host = c.host,
         port = c.port,
         ssl = c.ssl,
         method = "POST",
-        path = (c.basePath or "/v1") .. "/audio/transcriptions",
-        headers = {
-            ["Content-Type"] = "multipart/form-data; boundary=" .. boundary,
-            ["Authorization"] = "Bearer " .. (c.key or ""),
-        },
+        path = c.basePath .. "/audio/transcriptions",
+        headers = headers,
         body = table.concat(parts),
         callback = function(resp)
             if not resp.ok then

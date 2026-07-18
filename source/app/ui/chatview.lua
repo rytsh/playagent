@@ -42,7 +42,17 @@ function ChatView:_entryFor(i, font, lineH)
         text = "[using tools: " .. table.concat(names, ", ") .. "]"
     end
     local prefix = (msg.role == "user") and "YOU" or "AGENT"
-    local lines = TextWrap.wrap(font, text, TEXT_W)
+    local lines
+    if msg.role == "user" then
+        -- user text stays verbatim
+        lines = {}
+        for _, l in ipairs(TextWrap.wrap(font, text, TEXT_W)) do
+            lines[#lines + 1] = { text = l, indent = 0 }
+        end
+    else
+        -- assistant text gets the lightweight markdown treatment
+        lines = Markdown.layout(text, font, AppFontBold, TEXT_W)
+    end
     local entry = {
         prefix = prefix,
         role = msg.role,
@@ -105,7 +115,16 @@ function ChatView:update(statusText, allowInput)
                 AppFontBold:drawText(entry.prefix, MARGIN + 2, y)
                 local ty = y + 16
                 for _, line in ipairs(entry.lines) do
-                    font:drawText(line, MARGIN + 14, ty)
+                    if line.rule then
+                        gfx.drawLine(MARGIN + 14, ty + lineH // 2,
+                            MARGIN + 14 + TEXT_W, ty + lineH // 2)
+                    else
+                        local f = line.bold and AppFontBold or font
+                        f:drawText(line.text, MARGIN + 14 + (line.indent or 0), ty)
+                        if line.code then
+                            gfx.fillRect(MARGIN + 14 + 2, ty, 2, lineH)
+                        end
+                    end
                     ty += lineH
                 end
                 if entry.role == "user" then

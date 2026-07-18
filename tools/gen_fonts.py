@@ -41,8 +41,12 @@ CODEPOINTS = list(range(0x20, 0x180)) + [
 ]
 
 
-def generate(font_path, output_dir, name):
+def generate(font_path, output_dir, name, bold=False):
+    # At this tiny point size the 1-bit threshold eats the weight difference
+    # of the real Bold cut, so the bold face gets a synthetic double-strike
+    # (every glyph drawn twice, 1px apart) and one extra pixel of advance.
     rows = math.ceil(len(CODEPOINTS) / COLUMNS)
+    advance = ADVANCE + 1 if bold else ADVANCE
     image_path = os.path.join(
         output_dir, f"{name}-table-{CELL_W}-{CELL_H}.png"
     )
@@ -65,6 +69,8 @@ def generate(font_path, output_dir, name):
         x = index % COLUMNS * CELL_W + 1
         y = index // COLUMNS * CELL_H + BASELINE
         command.extend(["-annotate", f"+{x}+{y}", chr(codepoint)])
+        if bold:
+            command.extend(["-annotate", f"+{x + 1}+{y}", chr(codepoint)])
     command.append(image_path)
     subprocess.run(command, check=True)
 
@@ -73,7 +79,7 @@ def generate(font_path, output_dir, name):
         definition.write("tracking=0\n")
         for codepoint in CODEPOINTS:
             glyph = "space" if codepoint == 0x20 else f"U+{codepoint:04X}"
-            definition.write(f"{glyph}\t{ADVANCE}\n")
+            definition.write(f"{glyph}\t{advance}\n")
 
 
 def main():
@@ -104,7 +110,7 @@ def main():
     for name, path in fonts.items():
         if not os.path.isfile(path):
             raise SystemExit(f"font not found: {path}")
-        generate(path, args.output, name)
+        generate(path, args.output, name, bold=name.endswith("-Bold"))
         print(f"generated {name}")
 
 
