@@ -67,7 +67,8 @@ An LLM agent that runs entirely on your [Playdate](https://play.date).
 > Requires **Playdate OS / SDK 2.7 or newer** (the release that added the
 > `playdate.network` HTTP API).
 
-## Installing the Playdate SDK on Linux
+<details>
+<summary>Installing the Playdate SDK on Linux</summary>
 
 1. Download and unpack the SDK:
 
@@ -119,6 +120,8 @@ PlaydateSimulator PlayAgent.pdx
 
 > Note: networking (`playdate.network`) works in the Simulator from SDK 2.7
 > on, so the whole app can be tested without hardware.
+
+</details>
 
 ## Installing on the device
 
