@@ -1,0 +1,36 @@
+{
+  "api": {
+    "host": "api.openai.com",
+    "port": 443,
+    "ssl": true,
+    "basePath": "/v1",
+    "key": "sk-REPLACE-ME",
+    "model": "gpt-4o-mini"
+  },
+  "stt": {
+    "model": "whisper-1",
+    "maxSeconds": 15,
+    "language": ""
+  },
+  "mcpServers": [
+    {
+      "name": "example",
+      "host": "mcp.example.com",
+      "port": 443,
+      "ssl": true,
+      "path": "/mcp",
+      "enabled": false
+    }
+  ],
+  "remotes": [
+    {
+      "name": "dev-pc",
+      "host": "192.168.1.20",
+      "port": 4096,
+      "username": "opencode",
+      "password": ""
+    }
+  ],
+  "personaId": "assistant",
+  "customPersona": ""
+}

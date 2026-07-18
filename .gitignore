@@ -1,0 +1,4 @@
+PlayAgent.pdx/
+*.pdx.zip
+tools/playagent-config.json
+__pycache__

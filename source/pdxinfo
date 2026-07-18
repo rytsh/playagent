@@ -1,0 +1,7 @@
+name=PlayAgent
+author=ray
+description=An LLM agent for Playdate: OpenAI-compatible chat, remote MCP tools & prompts, speech-to-text
+bundleID=com.ray.playagent
+version=0.1.0
+buildNumber=1
+imagePath=launcher
