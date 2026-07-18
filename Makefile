@@ -33,6 +33,11 @@ receive-config:
 assets:
 	python3 tools/gen_assets.py
 
+# Regenerate placeholder buddy sprites (AI art: see tools/import_buddy.py)
+.PHONY: buddies
+buddies:
+	python3 tools/gen_buddies.py
+
 .PHONY: fonts
 fonts:
 	python3 tools/gen_fonts.py

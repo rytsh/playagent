@@ -62,6 +62,7 @@ function HomeScene.new()
     self.list = ListView.new({
         { text = "New session" },
         { text = "Sessions" },
+        { text = "Buddy" },
         { text = "Remote: opencode" },
         { text = "MCP servers" },
         { text = "Persona" },
@@ -73,9 +74,9 @@ end
 
 function HomeScene:enter()
     local persona = Personas.byId(Config.data.personaId)
-    self.list.items[3].detail = tostring(#Config.data.remotes)
-    self.list.items[4].detail = tostring(#Config.data.mcpServers)
-    self.list.items[5].detail = persona.name
+    self.list.items[4].detail = tostring(#Config.data.remotes)
+    self.list.items[5].detail = tostring(#Config.data.mcpServers)
+    self.list.items[6].detail = persona.name
 end
 
 function HomeScene:update()
@@ -91,14 +92,16 @@ function HomeScene:update()
         elseif idx == 2 then
             Scenes.push(SessionsScene.new())
         elseif idx == 3 then
-            Scenes.push(RemoteListScene.new())
+            Scenes.push(BuddyPickScene.new())
         elseif idx == 4 then
-            Scenes.push(McpScene.new())
+            Scenes.push(RemoteListScene.new())
         elseif idx == 5 then
-            Scenes.push(PersonaScene.new())
+            Scenes.push(McpScene.new())
         elseif idx == 6 then
-            Scenes.push(SettingsScene.new())
+            Scenes.push(PersonaScene.new())
         elseif idx == 7 then
+            Scenes.push(SettingsScene.new())
+        elseif idx == 8 then
             Scenes.push(AboutScene.new())
         end
         return
@@ -450,7 +453,11 @@ function SessionsScene:update()
                     if label == "Open" then
                         local session = Sessions.load(item.id)
                         if session ~= nil then
-                            Scenes.push(ChatScene.new(session))
+                            if Buddies.fromPersonaId(session.personaId) then
+                                Scenes.push(BuddyScene.new(session))
+                            else
+                                Scenes.push(ChatScene.new(session))
+                            end
                         end
                     elseif label == "Delete" then
                         Sessions.delete(item.id)

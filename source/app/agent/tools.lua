@@ -46,6 +46,45 @@ function BuiltinTools.defs()
         {
             type = "function",
             ["function"] = {
+                name = "play_sound",
+                description = "Play a sound on the Playdate speaker. Either "
+                    .. "pick a preset effect OR compose a short melody with "
+                    .. "notes. Use it for fun, feedback or emphasis; at most "
+                    .. "one sound per reply.",
+                parameters = {
+                    type = "object",
+                    properties = {
+                        preset = {
+                            type = "string",
+                            enum = Sfx.presetNames(),
+                            description = "A preset effect to play.",
+                        },
+                        notes = {
+                            type = "string",
+                            description = "Melody as comma-separated "
+                                .. "NOTE:milliseconds pairs, e.g. "
+                                .. "\"C4:120,E4:120,G#4:240,R:100,C5:400\". "
+                                .. "R is a rest. Octaves 2-7 sound best. "
+                                .. "Ignored if preset is given.",
+                        },
+                        wave = {
+                            type = "string",
+                            enum = { "sine", "square", "triangle", "saw",
+                                "noise" },
+                            description = "Waveform for notes "
+                                .. "(default square).",
+                        },
+                        volume = {
+                            type = "number",
+                            description = "0.0 to 1.0 (default 0.6).",
+                        },
+                    },
+                },
+            },
+        },
+        {
+            type = "function",
+            ["function"] = {
                 name = "list_personas",
                 description = "List the personas the agent can play: the "
                     .. "built-in ones and the user-defined ones stored on "
@@ -111,6 +150,24 @@ function BuiltinTools.run(name, args)
             crank_position_degrees = playdate.getCrankPosition(),
             crank_docked = playdate.isCrankDocked(),
         })
+    end
+    if name == "play_sound" then
+        local vol = tonumber(args.volume)
+        if vol ~= nil then vol = math.max(0, math.min(1, vol)) end
+        if args.preset ~= nil and #tostring(args.preset) > 0 then
+            if Sfx.preset(args.preset) then
+                return json.encode({ played = args.preset })
+            end
+            return "Error: unknown preset \"" .. tostring(args.preset)
+                .. "\". Available: "
+                .. table.concat(Sfx.presetNames(), ", ")
+        end
+        if args.notes ~= nil and #tostring(args.notes) > 0 then
+            local err = Sfx.playNotes(args.notes, args.wave, vol)
+            if err ~= nil then return "Error: " .. err end
+            return json.encode({ played = "notes" })
+        end
+        return "Error: give either preset or notes."
     end
     if name == "list_personas" then
         local builtin = {}

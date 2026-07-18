@@ -15,20 +15,24 @@ function Sessions.saveIndex(idx)
     playdate.datastore.write(idx, "sessions")
 end
 
-function Sessions.create(personaId)
+-- buddyName: custom pet name for buddy sessions (optional).
+function Sessions.create(personaId, buddyName)
     local idx = Sessions.loadIndex()
     local id = idx.nextId
     idx.nextId = id + 1
     local t = playdate.getTime()
-    local title = string.format("Session %d (%02d/%02d %02d:%02d)", id, t.day, t.month, t.hour, t.minute)
+    local prefix = buddyName or "Session"
+    local title = string.format("%s %d (%02d/%02d %02d:%02d)", prefix, id, t.day, t.month, t.hour, t.minute)
     table.insert(idx.list, 1, { id = id, title = title, personaId = personaId })
     Sessions.saveIndex(idx)
 
     local session = {
         id = id,
         personaId = personaId,
+        buddyName = buddyName,
         messages = {
-            { role = "system", content = Personas.systemPrompt(personaId) },
+            { role = "system",
+                content = Personas.systemPrompt(personaId, buddyName) },
         },
     }
     Sessions.save(session)

@@ -74,6 +74,16 @@ function Personas.all()
 end
 
 function Personas.byId(id)
+    -- Buddy mode personas ("buddy:<animal>") live in app/buddy.lua.
+    local buddy = Buddies.fromPersonaId(id)
+    if buddy ~= nil then
+        return {
+            id = id,
+            name = buddy.name .. " (" .. buddy.kind .. ")",
+            prompt = Buddies.prompt(buddy),
+            buddy = true,
+        }
+    end
     local userName = (id or ""):match("^user:(.+)$")
     if userName ~= nil then
         local prompt = (Config.data.personas or {})[userName]
@@ -87,9 +97,13 @@ function Personas.byId(id)
     return Personas.list[1]
 end
 
-function Personas.systemPrompt(id)
+-- buddyName: custom pet name for buddy personas (optional).
+function Personas.systemPrompt(id, buddyName)
     local p = Personas.byId(id)
     local prompt = p.prompt
+    if p.buddy and buddyName ~= nil then
+        prompt = Buddies.prompt(Buddies.fromPersonaId(id), buddyName)
+    end
     if p.id == "custom" then
         prompt = Config.data.customPersona
         if prompt == nil or #prompt == 0 then

@@ -8,6 +8,8 @@ import "CoreLibs/crank"
 import "CoreLibs/keyboard"
 
 import "app/config"
+import "app/sfx"
+import "app/buddy"
 import "app/ui/emoji"
 import "app/ui/wrap"
 import "app/ui/markdown"
@@ -30,6 +32,7 @@ import "app/agent/tools"
 import "app/agent/agent"
 import "app/scenes"
 import "app/scenes_remote"
+import "app/scenes_buddy"
 
 local gfx <const> = playdate.graphics
 
