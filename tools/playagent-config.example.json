@@ -9,8 +9,10 @@
   },
   "stt": {
     "model": "whisper-1",
+    "externalModel": "Systran/faster-whisper-small",
     "maxSeconds": 15,
     "language": "",
+    "useExternal": false,
     "host": "",
     "port": 8000,
     "ssl": false,

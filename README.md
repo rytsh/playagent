@@ -4,6 +4,16 @@ An LLM agent that runs entirely on your [Playdate](https://play.date).
 
 > Check [releases](https://github.com/rytsh/playagent/releases) for the latest builds, or build from source (requires Playdate SDK 2.7+).
 
+## Screenshots
+
+| Chatting with the agent                                                                            | The talk menu                                                                                |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| ![Chat view: the agent answers a battery question using the device_status tool](assets/talk-1.png) | ![Talk menu: type, speak, dictate live, retry or delete the last message](assets/talk-2.png) |
+
+| Settings                                                        | Chat                               |
+| --------------------------------------------------------------- | ---------------------------------- |
+| ![Settings: API host, model, STT and more](assets/settings.png) | ![Chat message](assets/talk-3.png) |
+
 - **OpenAI-compatible chat** — talks to any endpoint speaking the OpenAI
   chat completions protocol (OpenAI, OpenRouter, llama.cpp server, Ollama,
   vLLM, ...), with full tool calling support.
@@ -19,9 +29,10 @@ An LLM agent that runs entirely on your [Playdate](https://play.date).
   you speak: speech is chunked at pauses, uploaded in the background and the
   transcript accumulates on screen (~1.5-3s behind your voice; a local
   faster-whisper/whisper.cpp server on the LAN gives the lowest latency).
-  STT can use its **own endpoint** (Settings → *STT host/port/...*), so the
-  chat LLM and the Whisper server can live on different machines — leave
-  *STT host* empty to reuse the chat API endpoint.
+  STT can use its **own endpoint** (Settings → *Speech-to-text* → *External
+  endpoint*), so the chat LLM and the Whisper server can live on different
+  machines. External STT is off by default; while off, its saved host, key
+  and model are ignored and transcription always uses the main API endpoint.
 
   Tips for a local server (e.g. [speaches](https://speaches.ai)/faster-whisper
   with a model like `Systran/faster-whisper-small`): set **STT language**
@@ -55,16 +66,6 @@ An LLM agent that runs entirely on your [Playdate](https://play.date).
 
 > Requires **Playdate OS / SDK 2.7 or newer** (the release that added the
 > `playdate.network` HTTP API).
-
-## Screenshots
-
-| Chatting with the agent                                                                            | The talk menu                                                                                |
-| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| ![Chat view: the agent answers a battery question using the device_status tool](assets/talk-1.png) | ![Talk menu: type, speak, dictate live, retry or delete the last message](assets/talk-2.png) |
-
-| Settings                                                        |
-| --------------------------------------------------------------- |
-| ![Settings: API host, model, STT and more](assets/settings.png) |
 
 ## Installing the Playdate SDK on Linux
 

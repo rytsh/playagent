@@ -20,11 +20,15 @@ local function readWholeFile(path)
     return table.concat(chunks), nil
 end
 
--- Resolve the endpoint: a dedicated STT server when stt.host is set,
--- otherwise the chat API endpoint. Returns { host, port, ssl, basePath, key }.
+-- Resolve the endpoint: the dedicated STT server when enabled and
+-- configured, otherwise the chat API endpoint.
+-- Returns { host, port, ssl, basePath, key, external }.
 function STT.endpoint()
     local s = Config.data.stt
-    if s.host ~= nil and #s.host > 0 then
+    if s.useExternal == true then
+        if s.host == nil or #s.host == 0 then
+            return nil, "external STT is enabled but its host is empty"
+        end
         return {
             host = s.host,
             port = s.port or (s.ssl and 443 or 80),
@@ -33,6 +37,7 @@ function STT.endpoint()
             -- deliberately NOT falling back to api.key: don't leak the LLM
             -- key to a different (usually local, auth-less) server
             key = s.key or "",
+            external = true,
         }
     end
     local a = Config.data.api
@@ -42,6 +47,7 @@ function STT.endpoint()
         ssl = a.ssl,
         basePath = a.basePath or "/v1",
         key = a.key or "",
+        external = false,
     }
 end
 
@@ -57,8 +63,17 @@ function STT.transcribe(wavPath, callback, contextPrompt)
         return
     end
 
-    local c = STT.endpoint()
-    local sttModel = Config.data.stt.model or "whisper-1"
+    local c, endpointErr = STT.endpoint()
+    if c == nil then
+        callback(nil, endpointErr)
+        return
+    end
+    local sttModel
+    if c.external then
+        sttModel = Config.data.stt.externalModel or "Systran/faster-whisper-small"
+    else
+        sttModel = Config.data.stt.model or "whisper-1"
+    end
     local secs = playdate.getSecondsSinceEpoch()
     local boundary = "----PlayAgentBoundary" .. tostring(secs)
 
@@ -88,29 +103,38 @@ function STT.transcribe(wavPath, callback, contextPrompt)
         headers["Authorization"] = "Bearer " .. c.key
     end
 
-    Http.request({
-        host = c.host,
-        port = c.port,
-        ssl = c.ssl,
-        method = "POST",
-        path = c.basePath .. "/audio/transcriptions",
-        headers = headers,
-        body = table.concat(parts),
-        callback = function(resp)
-            if not resp.ok then
-                callback(nil, resp.error or "network error")
-                return
-            end
-            if resp.status ~= 200 then
-                callback(nil, "HTTP " .. tostring(resp.status) .. " " .. (resp.body or ""):sub(1, 160))
-                return
-            end
-            local data = json.decode(resp.body)
-            if data == nil or data.text == nil then
-                callback(nil, "unexpected transcription response")
-                return
-            end
-            callback(data.text, nil)
-        end,
-    })
+    Http.whenConnected(function(networkErr)
+        if networkErr ~= nil then
+            callback(nil, networkErr)
+            return
+        end
+        Http.request({
+            host = c.host,
+            port = c.port,
+            ssl = c.ssl,
+            method = "POST",
+            path = c.basePath .. "/audio/transcriptions",
+            headers = headers,
+            body = table.concat(parts),
+            callback = function(resp)
+                if not resp.ok then
+                    callback(nil, "STT " .. c.host .. ": "
+                        .. (resp.error or "network error"))
+                    return
+                end
+                if resp.status ~= 200 then
+                    callback(nil, "STT " .. c.host .. " HTTP "
+                        .. tostring(resp.status) .. " "
+                        .. (resp.body or ""):sub(1, 160))
+                    return
+                end
+                local data = json.decode(resp.body)
+                if data == nil or data.text == nil then
+                    callback(nil, "unexpected transcription response from " .. c.host)
+                    return
+                end
+                callback(data.text, nil)
+            end,
+        })
+    end)
 end

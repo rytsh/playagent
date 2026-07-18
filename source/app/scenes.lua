@@ -728,6 +728,144 @@ local function maskKey(key)
     return key:sub(1, 4) .. "..." .. key:sub(-4)
 end
 
+------------------------------------------------------------------------
+-- SttSettingsScene: speech-to-text and optional dedicated endpoint
+------------------------------------------------------------------------
+
+SttSettingsScene = {}
+SttSettingsScene.__index = SttSettingsScene
+
+function SttSettingsScene.new()
+    local self = setmetatable({}, SttSettingsScene)
+    self.list = ListView.new({})
+    self.list.rowHeight = 22
+    return self
+end
+
+function SttSettingsScene:refresh()
+    local s = Config.data.stt
+    local items = {
+        {
+            text = "External endpoint",
+            detail = s.useExternal and "on" or "off",
+            key = "external",
+        },
+        {
+            text = "Model",
+            detail = s.useExternal and s.externalModel or s.model,
+            key = "model",
+        },
+        {
+            text = "Language",
+            detail = (#(s.language or "") > 0) and s.language or "auto",
+            key = "language",
+        },
+        { text = "Max record sec", detail = tostring(s.maxSeconds), key = "seconds" },
+    }
+    if s.useExternal then
+        items[#items + 1] = {
+            text = "Host",
+            detail = (#(s.host or "") > 0) and s.host or "(required)",
+            key = "host",
+        }
+        items[#items + 1] = { text = "Port", detail = tostring(s.port or 8000), key = "port" }
+        items[#items + 1] = { text = "HTTPS", detail = s.ssl and "on" or "off", key = "ssl" }
+        items[#items + 1] = { text = "Base path", detail = s.basePath or "/v1", key = "basePath" }
+        items[#items + 1] = { text = "API key", detail = maskKey(s.key), key = "key" }
+    end
+    self.list:setItems(items)
+end
+
+function SttSettingsScene:enter()
+    self:refresh()
+end
+
+function SttSettingsScene:edit(item)
+    local s = Config.data.stt
+    local function done()
+        Config.save()
+        self:refresh()
+    end
+
+    if item.key == "external" then
+        if s.useExternal then
+            s.useExternal = false
+            done()
+        elseif s.host ~= nil and #s.host > 0 then
+            s.useExternal = true
+            done()
+        else
+            TextInput.show("External STT host:", "", function(host)
+                if host == nil or #host == 0 then return end
+                s.host = host
+                s.useExternal = true
+                done()
+            end)
+        end
+        return
+    end
+    if item.key == "ssl" then
+        s.ssl = not s.ssl
+        done()
+        return
+    end
+
+    local prompts = {
+        model = {
+            s.useExternal and "External STT model:" or "Main API STT model:",
+            s.useExternal and s.externalModel or s.model,
+            function(v)
+                if s.useExternal then s.externalModel = v else s.model = v end
+            end,
+        },
+        language = { "Language (ISO or empty):", s.language or "", function(v) s.language = v end, true },
+        seconds = { "Max record seconds:", tostring(s.maxSeconds), function(v)
+            s.maxSeconds = math.max(2, math.min(30, tonumber(v) or s.maxSeconds))
+        end },
+        host = { "External STT host:", s.host or "", function(v) s.host = v end },
+        port = { "External STT port:", tostring(s.port or 8000), function(v)
+            s.port = tonumber(v) or s.port
+        end },
+        basePath = { "STT base path:", s.basePath or "/v1", function(v) s.basePath = v end },
+        key = { "STT key (empty = no auth):", s.key or "", function(v) s.key = v end, true },
+    }
+    local p = prompts[item.key]
+    if p == nil then return end
+    TextInput.show(p[1], p[2], function(text)
+        if text == nil then return end
+        if #text > 0 or p[4] then p[3](text) end
+        done()
+    end)
+end
+
+function SttSettingsScene:update()
+    if TextInput.active then
+        TextInput.draw()
+        return
+    end
+    drawTitle("Speech-to-text")
+    if self.list:handleInput() then
+        local item = self.list:current()
+        if item ~= nil then self:edit(item) end
+        return
+    end
+    if playdate.buttonJustPressed(playdate.kButtonB) then
+        Config.save()
+        Scenes.pop()
+        return
+    end
+    self.list:draw(10, 34, 376, 166)
+    local endpoint
+    if Config.data.stt.useExternal then
+        endpoint = "Endpoint: " .. Config.data.stt.host .. ":"
+            .. tostring(Config.data.stt.port or 8000)
+    else
+        endpoint = "Endpoint: main API (" .. Config.data.api.host .. ")"
+    end
+    AppFont:drawText(TextWrap.truncate(AppFont, endpoint, 384), 8, 204)
+    drawHint("A: edit   B: back")
+end
+
 function SettingsScene:refresh()
     local a = Config.data.api
     local s = Config.data.stt
@@ -740,14 +878,11 @@ function SettingsScene:refresh()
         { text = "Base path", detail = a.basePath, key = "basePath" },
         { text = "API key", detail = maskKey(a.key), key = "key" },
         { text = "Model", detail = a.model, key = "model" },
-        { text = "STT model", detail = s.model, key = "sttModel" },
-        { text = "STT host", detail = (#(s.host or "") > 0) and s.host or "(same as API)", key = "sttHost" },
-        { text = "STT port", detail = tostring(s.port or 8000), key = "sttPort" },
-        { text = "STT HTTPS", detail = s.ssl and "on" or "off", key = "sttSsl" },
-        { text = "STT base path", detail = s.basePath or "/v1", key = "sttBase" },
-        { text = "STT key", detail = maskKey(s.key), key = "sttKey" },
-        { text = "STT language", detail = (#(s.language or "") > 0) and s.language or "auto", key = "sttLang" },
-        { text = "Max record sec", detail = tostring(s.maxSeconds), key = "sttSec" },
+        {
+            text = "Speech-to-text",
+            detail = s.useExternal and "external >" or "main API >",
+            key = "stt",
+        },
     })
 end
 
@@ -767,11 +902,6 @@ function SettingsScene:edit(item)
         done()
         return
     end
-    if item.key == "sttSsl" then
-        s.ssl = not s.ssl
-        done()
-        return
-    end
     if item.key == "import" then
         self:importConfig()
         return
@@ -780,19 +910,16 @@ function SettingsScene:edit(item)
         self:exportConfig()
         return
     end
+    if item.key == "stt" then
+        Scenes.push(SttSettingsScene.new())
+        return
+    end
     local prompts = {
         host = { "API host:", a.host, function(v) a.host = v end },
         port = { "API port:", tostring(a.port), function(v) a.port = tonumber(v) or a.port end },
         basePath = { "Base path:", a.basePath, function(v) a.basePath = v end },
         key = { "API key:", a.key, function(v) a.key = v end },
         model = { "Model:", a.model, function(v) a.model = v end },
-        sttModel = { "STT model:", s.model, function(v) s.model = v end },
-        sttHost = { "STT host (empty = same as API):", s.host or "", function(v) s.host = v end, true },
-        sttPort = { "STT port:", tostring(s.port or 8000), function(v) s.port = tonumber(v) or s.port end },
-        sttBase = { "STT base path:", s.basePath or "/v1", function(v) s.basePath = v end },
-        sttKey = { "STT key (empty = no auth):", s.key or "", function(v) s.key = v end, true },
-        sttLang = { "STT language (ISO code or empty):", s.language or "", function(v) s.language = v end, true },
-        sttSec = { "Max record seconds:", tostring(s.maxSeconds), function(v) s.maxSeconds = math.max(2, math.min(30, tonumber(v) or s.maxSeconds)) end },
     }
     local p = prompts[item.key]
     if p == nil then return end

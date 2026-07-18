@@ -51,9 +51,11 @@ TEMPLATE = {
     },
     "stt": {
         "model": "whisper-1",
+        "externalModel": "Systran/faster-whisper-small",
         "maxSeconds": 15,
         "language": "",
-        # separate STT server; empty host = same endpoint as "api"
+        # dedicated STT server is ignored unless explicitly enabled
+        "useExternal": False,
         "host": "",
         "port": 8000,
         "ssl": False,

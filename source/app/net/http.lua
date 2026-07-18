@@ -23,17 +23,75 @@ Http = {}
 
 local DEFAULT_REASON <const> = "PlayAgent needs network access to talk to your AI services."
 
+local networkWaiters = {}
+local networkDeadline = nil
+local networkError = nil
+
+local function enableNetwork()
+    if playdate.network ~= nil and playdate.network.setEnabled ~= nil then
+        networkError = nil
+        playdate.network.setEnabled(true, function(err)
+            networkError = err
+        end)
+    end
+end
+
+local function finishNetworkWaiters(err)
+    local waiters = networkWaiters
+    networkWaiters = {}
+    networkDeadline = nil
+    networkError = nil
+    for _, callback in ipairs(waiters) do callback(err) end
+end
+
 -- Request blanket HTTP access up front, from the playdate.update() context.
 -- Later connections (LLM host, MCP hosts, ...) then never trigger the
 -- permission dialog from inside a network/system callback, which the OS
 -- does not allow.
 local accessRequested = false
 function Http.ensureAccess()
-    if accessRequested then return end
-    accessRequested = true
-    if playdate.network ~= nil and playdate.network.http ~= nil
-        and playdate.network.http.requestAccess ~= nil then
-        playdate.network.http.requestAccess(nil, nil, true, DEFAULT_REASON)
+    if not accessRequested then
+        accessRequested = true
+        if playdate.network ~= nil and playdate.network.http ~= nil
+            and playdate.network.http.requestAccess ~= nil then
+            playdate.network.http.requestAccess(nil, nil, true, DEFAULT_REASON)
+        end
+        -- Wake the radio before the first request. Connecting to an AP can
+        -- take up to ten seconds, while Playdate normally waits until a
+        -- request arrives and powers Wi-Fi down again after an idle period.
+        enableNetwork()
+    end
+
+    -- Pump connection waiters here so their HTTP requests start from the
+    -- playdate.update() context, not from a mic/network system callback.
+    if #networkWaiters > 0 then
+        local status = playdate.network.getStatus()
+        if status == playdate.network.kStatusConnected then
+            finishNetworkWaiters(nil)
+        elseif networkError ~= nil then
+            finishNetworkWaiters("Wi-Fi: " .. tostring(networkError))
+        elseif networkDeadline ~= nil
+            and playdate.getCurrentTimeMilliseconds() >= networkDeadline then
+            finishNetworkWaiters("Wi-Fi: not connected to an access point")
+        end
+    end
+end
+
+-- Run callback(err) once the device is connected to its configured Wi-Fi
+-- access point. The callback is dispatched by ensureAccess() from update().
+function Http.whenConnected(callback)
+    if playdate.network == nil or playdate.network.getStatus == nil then
+        callback(nil)
+        return
+    end
+    if playdate.network.getStatus() == playdate.network.kStatusConnected then
+        callback(nil)
+        return
+    end
+    networkWaiters[#networkWaiters + 1] = callback
+    if networkDeadline == nil then
+        networkDeadline = playdate.getCurrentTimeMilliseconds() + 15000
+        enableNetwork()
     end
 end
 

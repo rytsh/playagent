@@ -15,12 +15,14 @@ local DEFAULTS = {
     },
     stt = {
         model = "whisper-1",
+        externalModel = "Systran/faster-whisper-small",
         maxSeconds = 15,
         language = "", -- empty = auto
-        -- Separate STT endpoint. Leave host empty to use the chat API
-        -- endpoint (api.*). When host is set, port/ssl/basePath/key below
-        -- apply (key may stay empty for LAN servers without auth, e.g.
-        -- speaches / faster-whisper-server).
+        -- Separate STT endpoint. Only used when useExternal is true AND a
+        -- host is set; otherwise transcription goes to the chat API
+        -- endpoint (api.*). key may stay empty for LAN servers without
+        -- auth (speaches / faster-whisper-server).
+        useExternal = false,
         host = "",
         port = 8000,
         ssl = false,
@@ -59,6 +61,16 @@ end
 
 function Config.load()
     local data = playdate.datastore.read("config") or {}
+    -- Before external STT had an explicit toggle/model field, its model was
+    -- stored in stt.model. Preserve that setup without accidentally sending
+    -- a local model name to the main API when external STT defaults to off.
+    if type(data.stt) == "table"
+        and data.stt.externalModel == nil
+        and type(data.stt.host) == "string" and #data.stt.host > 0
+        and type(data.stt.model) == "string" and data.stt.model ~= "whisper-1" then
+        data.stt.externalModel = data.stt.model
+        data.stt.model = "whisper-1"
+    end
     deepMerge(data, DEFAULTS)
     -- datastore JSON round-trip turns empty tables into arrays; make sure
     -- mcpServers is a plain array table.
