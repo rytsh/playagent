@@ -9,6 +9,7 @@ OpenAI = {}
 -- callback(message, err, usage): message = choices[1].message on success;
 -- usage = the response "usage" table (prompt/completion/total tokens) if
 -- the server reported one
+-- Returns the connection object (close() it to cancel), or nil.
 function OpenAI.chat(messages, tools, callback)
     local c = Config.data.api
     local payload = {
@@ -20,7 +21,7 @@ function OpenAI.chat(messages, tools, callback)
         payload.tools = tools
     end
 
-    Http.request({
+    return Http.request({
         host = c.host,
         port = c.port,
         ssl = c.ssl,

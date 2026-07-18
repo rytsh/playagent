@@ -180,8 +180,8 @@ port forwarding entirely.
 
 The app stores its settings as `config.json` in its data folder. On the
 device: **Settings → System → Reboot to Data Disk**, then copy your JSON to
-`/Data/com.ray.playagent/config.json`. In the Simulator the same file lives
-at `$PLAYDATE_SDK_PATH/Disk/Data/com.ray.playagent/config.json` — configure
+`/Data/com.rytsh.playagent/config.json`. In the Simulator the same file lives
+at `$PLAYDATE_SDK_PATH/Disk/Data/com.rytsh.playagent/config.json` — configure
 everything comfortably in the Simulator first, then upload to the device.
 
 ### The manual way

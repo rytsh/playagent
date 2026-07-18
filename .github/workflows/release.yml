@@ -1,0 +1,48 @@
+# Build PlayAgent.pdx and attach it to a GitHub release.
+# Trigger: push a tag like v0.1.0 (git tag v0.1.0 && git push origin v0.1.0).
+# The version in source/pdxinfo is overwritten from the tag name, so the
+# tag is the single source of truth for the released version.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  SDK_VERSION: 3.1.0
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Playdate SDK
+        run: |
+          curl -fsSL -o sdk.tar.gz \
+            "https://download.panic.com/playdate_sdk/Linux/PlaydateSDK-${SDK_VERSION}.tar.gz"
+          tar xzf sdk.tar.gz
+          echo "PLAYDATE_SDK_PATH=$PWD/PlaydateSDK-${SDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Set version from tag
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          sed -i "s/^version=.*/version=${ver}/" source/pdxinfo
+          sed -i "s/^buildNumber=.*/buildNumber=${GITHUB_RUN_NUMBER}/" source/pdxinfo
+          cat source/pdxinfo
+
+      - name: Build
+        run: make build
+
+      - name: Package
+        run: zip -r "PlayAgent-${GITHUB_REF_NAME}.pdx.zip" PlayAgent.pdx
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: PlayAgent-*.pdx.zip
+          generate_release_notes: true

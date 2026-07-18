@@ -1,5 +1,6 @@
 -- Scene stack + all app scenes:
---   HomeScene, ChatScene, SessionsScene, McpScene, PersonaScene, SettingsScene
+--   HomeScene, ChatScene, SessionsScene, McpScene, PersonaScene,
+--   SettingsScene, AboutScene
 
 local gfx <const> = playdate.graphics
 
@@ -65,6 +66,7 @@ function HomeScene.new()
         { text = "MCP servers" },
         { text = "Persona" },
         { text = "Settings" },
+        { text = "About" },
     })
     return self
 end
@@ -96,6 +98,8 @@ function HomeScene:update()
             Scenes.push(PersonaScene.new())
         elseif idx == 6 then
             Scenes.push(SettingsScene.new())
+        elseif idx == 7 then
+            Scenes.push(AboutScene.new())
         end
         return
     end
@@ -206,6 +210,10 @@ function ChatScene:openActionMenu()
         if #client.prompts > 0 then hasPrompts = true end
     end
     if hasPrompts then options[#options + 1] = "MCP prompts" end
+    if self.agent:lastUserIndex() ~= nil then
+        options[#options + 1] = "Retry last message"
+        options[#options + 1] = "Delete last message"
+    end
     options[#options + 1] = "Stats"
     options[#options + 1] = "Compact session"
 
@@ -262,6 +270,20 @@ function ChatScene:openActionMenu()
                         self:send(text)
                     end
                 end)
+            elseif label == "Retry last message" then
+                -- Drop replies after the last user message and ask again.
+                if self.agent:rollbackLastUser(false) then
+                    self.view:invalidate()
+                    self.view:scrollToBottom()
+                    self.agent:run()
+                end
+            elseif label == "Delete last message" then
+                -- Remove the last user message and everything after it.
+                if self.agent:rollbackLastUser(true) then
+                    self:flash("Last message deleted.")
+                    self.view:invalidate()
+                    self.view:scrollToBottom()
+                end
             elseif label == "MCP prompts" then
                 self:openPromptPicker()
             end
@@ -348,6 +370,9 @@ function ChatScene:update()
             self.flashText = nil
         end
     end
+    if self.agent.busy and statusLine ~= nil then
+        statusLine = statusLine .. "   B: cancel"
+    end
     if statusLine == nil and not self.agent.busy then
         statusLine = "A: talk    B: back    crank: scroll"
         local frac = Agent.contextFraction(self.session)
@@ -363,13 +388,18 @@ function ChatScene:update()
 
     self.view:update(statusLine)
 
-    if not self.agent.busy then
-        if playdate.buttonJustPressed(playdate.kButtonA) then
-            self:openActionMenu()
-        elseif playdate.buttonJustPressed(playdate.kButtonB) then
-            Sessions.save(self.session)
-            Scenes.pop()
+    if self.agent.busy then
+        if playdate.buttonJustPressed(playdate.kButtonB) then
+            self.agent:cancel()
+            self:flash("Cancelled.")
+            self.view:invalidate()
+            self.view:scrollToBottom()
         end
+    elseif playdate.buttonJustPressed(playdate.kButtonA) then
+        self:openActionMenu()
+    elseif playdate.buttonJustPressed(playdate.kButtonB) then
+        Sessions.save(self.session)
+        Scenes.pop()
     end
 end
 
@@ -903,4 +933,46 @@ function SettingsScene:update()
         AppFont:drawText(TextWrap.truncate(AppFont, self.info, 384), 8, 200)
     end
     drawHint("A: edit   B: back")
+end
+
+------------------------------------------------------------------------
+-- AboutScene: version, project link and contact info
+------------------------------------------------------------------------
+
+local ABOUT_GITHUB <const> = "github.com/rytsh/playagent"
+local ABOUT_EMAIL <const> = "eates23@gmail.com"
+
+AboutScene = {}
+AboutScene.__index = AboutScene
+
+function AboutScene.new()
+    return setmetatable({}, AboutScene)
+end
+
+function AboutScene:update()
+    drawTitle("About")
+
+    local meta = playdate.metadata or {}
+    local version = meta.version or "?"
+    local y = 42
+
+    AppFontBold:drawText("PlayAgent v" .. version, 8, y)
+    y += 22
+    AppFont:drawText("An LLM agent for the Playdate.", 8, y)
+    y += 34
+
+    AppFontBold:drawText("Project", 8, y)
+    y += 20
+    AppFont:drawText(ABOUT_GITHUB, 8, y)
+    y += 34
+
+    AppFontBold:drawText("Contact", 8, y)
+    y += 20
+    AppFont:drawText(ABOUT_EMAIL, 8, y)
+
+    if playdate.buttonJustPressed(playdate.kButtonB) then
+        Scenes.pop()
+        return
+    end
+    drawHint("B: back")
 end

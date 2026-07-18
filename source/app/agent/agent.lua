@@ -17,6 +17,7 @@ function Agent.new(session, hooks)
     self.session = session
     self.hooks = hooks
     self.busy = false
+    self.runId = 0 -- bumped on run()/cancel(); stale callbacks check it
     return self
 end
 
@@ -51,6 +52,7 @@ end
 function Agent:run()
     if self.busy then return end
     self.busy = true
+    self.runId += 1
     self.steps = 0
     self:_step()
 end
@@ -59,6 +61,60 @@ function Agent:_finish(err)
     self.busy = false
     Sessions.save(self.session)
     if self.hooks.onDone then self.hooks.onDone(err) end
+end
+
+-- Abort the in-flight run (e.g. B pressed while "Thinking...").
+-- Closes the LLM connection, invalidates pending async callbacks and
+-- drops any incomplete assistant/tool tail so the next request is valid.
+function Agent:cancel()
+    if not self.busy then return end
+    self.runId += 1 -- pending callbacks become stale and are ignored
+    if self.conn ~= nil then
+        pcall(function() self.conn:close() end)
+        self.conn = nil
+    end
+    self:_dropIncompleteTail()
+    self:_finish(nil)
+end
+
+-- Remove a trailing incomplete tool exchange (tool results without a
+-- follow-up reply, or an assistant message with dangling tool_calls);
+-- some providers reject transcripts ending that way.
+function Agent:_dropIncompleteTail()
+    local msgs = self.session.messages
+    while #msgs > 1 do
+        local m = msgs[#msgs]
+        if m.role == "tool"
+            or (m.role == "assistant" and m.tool_calls ~= nil) then
+            table.remove(msgs)
+        else
+            break
+        end
+    end
+end
+
+-- Index of the most recent user message, or nil.
+function Agent:lastUserIndex()
+    for i = #self.session.messages, 1, -1 do
+        if self.session.messages[i].role == "user" then return i end
+    end
+    return nil
+end
+
+-- Roll the transcript back to the last user message. With deleteUser the
+-- user message itself is removed too; otherwise it stays (ready to retry).
+-- Never touches the persona system prompt. Returns true on success.
+function Agent:rollbackLastUser(deleteUser)
+    if self.busy then return false end
+    local idx = self:lastUserIndex()
+    if idx == nil then return false end
+    local msgs = self.session.messages
+    local target = deleteUser and (idx - 1) or idx
+    if target < 1 then target = 1 end
+    while #msgs > target do table.remove(msgs) end
+    self.session.lastUsage = nil
+    Sessions.save(self.session)
+    return true
 end
 
 function Agent:_step()
@@ -79,7 +135,11 @@ function Agent:_step()
     for _, d in ipairs(mcpDefs) do tools[#tools + 1] = d end
     self.routing = routing
 
-    OpenAI.chat(self.session.messages, tools, function(message, err, usage)
+    local runId = self.runId
+    self.conn = OpenAI.chat(self.session.messages, tools,
+        function(message, err, usage)
+        if runId ~= self.runId then return end -- cancelled meanwhile
+        self.conn = nil
         if err ~= nil then
             self:_finish(err)
             return
@@ -123,7 +183,9 @@ function Agent:_runToolCalls(calls, i)
         args = json.decode(fn.arguments) or {}
     end
 
+    local runId = self.runId
     local function record(resultText)
+        if runId ~= self.runId then return end -- cancelled meanwhile
         table.insert(self.session.messages, {
             role = "tool",
             tool_call_id = call.id,
@@ -239,13 +301,17 @@ Reply with the summary only.]]
 function Agent:compact(cb)
     if self.busy then return end
     self.busy = true
+    self.runId += 1
     self:_status("Compacting session...")
 
     local msgs = {}
     for _, m in ipairs(self.session.messages) do msgs[#msgs + 1] = m end
     msgs[#msgs + 1] = { role = "user", content = COMPACT_REQUEST }
 
-    OpenAI.chat(msgs, nil, function(message, err)
+    local runId = self.runId
+    self.conn = OpenAI.chat(msgs, nil, function(message, err)
+        if runId ~= self.runId then return end -- cancelled meanwhile
+        self.conn = nil
         self.busy = false
         if err ~= nil or message == nil or message.content == nil
             or #message.content == 0 then
