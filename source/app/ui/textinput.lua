@@ -37,7 +37,7 @@ end
 -- keyboard is up. Call from the scene's update.
 function TextInput.draw()
     if not TextInput.active then return end
-    local font = gfx.getSystemFont()
+    local font = AppFont
     local w = math.max(60, playdate.keyboard.left() - 16)
     font:drawText(TextInput.prompt, 8, 8)
     local lines = TextWrap.wrap(font, playdate.keyboard.text .. "_", w)

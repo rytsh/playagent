@@ -25,10 +25,10 @@ end
 function ChoiceDialog:update()
     local margin <const> = 14
     local w <const> = 400 - margin * 2
-    local font = gfx.getSystemFont()
+    local font = AppFont
 
-    local qlines = TextWrap.wrap(font, self.question, w - 24)
-    local lineH = font:getHeight() + 2
+    local qlines = TextWrap.wrap(AppFontBold, self.question, w - 24)
+    local lineH = AppFontBold:getHeight() + 2
     local qh = #qlines * lineH
     local listH = math.min(#self.list.items, 5) * self.list.rowHeight
     local boxH = qh + listH + 30
@@ -40,7 +40,7 @@ function ChoiceDialog:update()
     gfx.drawRoundRect(margin - 4, boxY - 4, w + 8, boxH + 8, 6)
 
     for i, line in ipairs(qlines) do
-        font:drawText(line, margin + 8, boxY + 6 + (i - 1) * lineH)
+        AppFontBold:drawText(line, margin + 8, boxY + 6 + (i - 1) * lineH)
     end
 
     local selected = self.list:handleInput()

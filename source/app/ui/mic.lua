@@ -53,7 +53,7 @@ function MicRecorder:update()
         return self.state == "saving"
     end
 
-    local font = gfx.getSystemFont()
+    local font = AppFont
     local elapsed = (playdate.getCurrentTimeMilliseconds() - self.startedAt) / 1000
     local level = snd.micinput.getLevel()
 

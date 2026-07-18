@@ -38,7 +38,7 @@ function ListView:handleInput()
 end
 
 function ListView:draw(x, y, w, h)
-    local font = gfx.getSystemFont()
+    local font = AppFont
     local visible = math.floor(h / self.rowHeight)
     if self.selected - self.scroll > visible then
         self.scroll = self.selected - visible
@@ -55,10 +55,13 @@ function ListView:draw(x, y, w, h)
             gfx.fillRoundRect(x, ry, w, self.rowHeight - 2, 4)
             gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
         end
-        font:drawText(item.text, x + 8, ry + 4)
+        local label = tostring(item.text)
+        font:drawText(label, x + 8, ry + 4)
         if item.detail ~= nil then
-            local dw = font:getTextWidth(item.detail)
-            font:drawText(item.detail, x + w - dw - 8, ry + 4)
+            local detailWidth = w - font:getTextWidth(label) - 28
+            local detail = TextWrap.truncate(font, tostring(item.detail), detailWidth)
+            local dw = font:getTextWidth(detail)
+            font:drawText(detail, x + w - dw - 8, ry + 4)
         end
         gfx.setImageDrawMode(gfx.kDrawModeCopy)
     end

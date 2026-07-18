@@ -39,13 +39,13 @@ function Scenes.saveAll()
 end
 
 local function drawTitle(text)
-    gfx.drawText("*" .. text .. "*", 8, 6) -- gfx.drawText renders *...* bold
+    AppFontBold:drawText(text, 8, 6)
     gfx.setColor(gfx.kColorBlack)
     gfx.drawLine(0, 26, 400, 26)
 end
 
 local function drawHint(text)
-    local font = gfx.getSystemFont()
+    local font = AppFont
     font:drawText(text, 8, 222)
 end
 
@@ -78,7 +78,7 @@ end
 
 function HomeScene:update()
     drawTitle("PlayAgent")
-    local font = gfx.getSystemFont()
+    local font = AppFont
     font:drawText(Config.data.api.host .. "  /  " .. Config.data.api.model, 8, 200)
 
     if self.list:handleInput() then
@@ -277,7 +277,7 @@ function ChatScene:update()
     end
 
     if self.modal ~= nil then
-        self.view:update(self.status)
+        self.view:update(self.status, false)
         -- NOTE: a modal callback may replace self.modal with a new modal
         -- (e.g. choice menu -> mic recorder); only clear it if unchanged.
         local m = self.modal
@@ -343,7 +343,7 @@ function SessionsScene:update()
     end
 
     if #self.list.items == 0 then
-        gfx.getSystemFont():drawText("No sessions yet.", 12, 40)
+        AppFont:drawText("No sessions yet.", 12, 40)
         if playdate.buttonJustPressed(playdate.kButtonB) then Scenes.pop() end
         drawHint("B: back")
         return
@@ -495,7 +495,7 @@ function McpScene:update()
     end
     self.list:draw(10, 36, 370, 160)
     if self.testing ~= nil then
-        gfx.getSystemFont():drawText(self.testing, 8, 200)
+        AppFont:drawText(self.testing, 8, 200)
     end
     drawHint("A: select   B: back")
 end
@@ -711,7 +711,7 @@ function SettingsScene:update()
     end
     self.list:draw(10, 34, 376, 160)
     if self.info ~= nil then
-        gfx.getSystemFont():drawText(self.info, 8, 200)
+        AppFont:drawText(TextWrap.truncate(AppFont, self.info, 384), 8, 200)
     end
     drawHint("A: edit   B: back")
 end

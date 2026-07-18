@@ -6,13 +6,13 @@
 local gfx <const> = playdate.graphics
 
 local function drawTitle(text)
-    gfx.drawText("*" .. text .. "*", 8, 6)
+    AppFontBold:drawText(text, 8, 6)
     gfx.setColor(gfx.kColorBlack)
     gfx.drawLine(0, 26, 400, 26)
 end
 
 local function drawHint(text)
-    gfx.getSystemFont():drawText(text, 8, 222)
+    AppFont:drawText(text, 8, 222)
 end
 
 local function now()
@@ -124,7 +124,7 @@ function RemoteListScene:update()
     end
     self.list:draw(10, 36, 370, 160)
     if self.testing ~= nil then
-        gfx.getSystemFont():drawText(self.testing, 8, 200)
+        AppFont:drawText(self.testing, 8, 200)
     end
     drawHint("A: select   B: back")
 end
@@ -230,7 +230,7 @@ function RemoteSessionsScene:update()
     end
     self.list:draw(10, 36, 370, 180)
     if self.error ~= nil then
-        gfx.getSystemFont():drawText(self.error, 8, 200)
+        AppFont:drawText(self.error, 8, 200)
     end
     drawHint("A: open   B: back")
 end
@@ -544,7 +544,7 @@ function RemoteChatScene:update()
     self:maybeShowPermission()
 
     if self.modal ~= nil then
-        self.view:update(self:statusLine())
+        self.view:update(self:statusLine(), false)
         local m = self.modal
         if not m:update() and self.modal == m then self.modal = nil end
         return

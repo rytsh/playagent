@@ -28,6 +28,10 @@ provision:
 assets:
 	python3 tools/gen_assets.py
 
+.PHONY: fonts
+fonts:
+	python3 tools/gen_fonts.py
+
 # WSL only: forward Windows :$(PORT) to WSL so the Playdate can reach
 # servers running here (provisioning, opencode serve, ...). Asks for UAC.
 # Re-run after a Windows reboot (the WSL IP changes).

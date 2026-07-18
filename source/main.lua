@@ -30,6 +30,10 @@ import "app/scenes_remote"
 
 local gfx <const> = playdate.graphics
 
+AppFont = gfx.font.new("fonts/PlayAgent-Regular")
+AppFontBold = gfx.font.new("fonts/PlayAgent-Bold")
+gfx.setFont(AppFont)
+
 Config.load()
 
 playdate.display.setRefreshRate(30)

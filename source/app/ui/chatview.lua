@@ -72,8 +72,9 @@ function ChatView:scrollToBottom()
 end
 
 -- statusText: optional line rendered at the bottom (e.g. "Thinking...")
-function ChatView:update(statusText)
-    local font = gfx.getSystemFont()
+-- allowInput: false when another UI is handling controls over the transcript.
+function ChatView:update(statusText, allowInput)
+    local font = AppFont
     local lineH = font:getHeight() + 2
     local statusH = (statusText ~= nil) and 20 or 0
     local viewH = SCREEN_H - statusH
@@ -81,15 +82,17 @@ function ChatView:update(statusText)
     local total = self:contentHeight(font, lineH)
     local maxScroll = math.max(0, total - viewH)
 
-    local delta = 0
-    if playdate.buttonIsPressed(playdate.kButtonDown) then delta += 5 end
-    if playdate.buttonIsPressed(playdate.kButtonUp) then delta -= 5 end
-    local crank = playdate.getCrankChange()
-    if crank ~= 0 then delta += crank * 0.7 end
-    if delta ~= 0 then
-        self.autoFollow = false
-        self.scroll = math.max(0, math.min(maxScroll, self.scroll + delta))
-        if self.scroll >= maxScroll - 2 then self.autoFollow = true end
+    if allowInput ~= false then
+        local delta = 0
+        if playdate.buttonIsPressed(playdate.kButtonDown) then delta += 5 end
+        if playdate.buttonIsPressed(playdate.kButtonUp) then delta -= 5 end
+        local crank = playdate.getCrankChange()
+        if crank ~= 0 then delta += crank * 0.7 end
+        if delta ~= 0 then
+            self.autoFollow = false
+            self.scroll = math.max(0, math.min(maxScroll, self.scroll + delta))
+            if self.scroll >= maxScroll - 2 then self.autoFollow = true end
+        end
     end
     if self.autoFollow then self.scroll = maxScroll end
 
@@ -99,7 +102,7 @@ function ChatView:update(statusText)
         if displayable(msg) then
             local entry = self:_entryFor(i, font, lineH)
             if y + entry.height > 0 and y < viewH then
-                font:drawText(entry.prefix, MARGIN + 2, y)
+                AppFontBold:drawText(entry.prefix, MARGIN + 2, y)
                 local ty = y + 16
                 for _, line in ipairs(entry.lines) do
                     font:drawText(line, MARGIN + 14, ty)
