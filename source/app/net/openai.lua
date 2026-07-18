@@ -30,8 +30,14 @@ function OpenAI.chat(messages, tools, callback)
         headers = {
             ["Content-Type"] = "application/json",
             ["Authorization"] = "Bearer " .. (c.key or ""),
+            ["Connection"] = "close",
         },
         body = json.encode(payload),
+        -- generous: agent turns with long context can take a while
+        requestTimeout = 180,
+        bodyComplete = function(body)
+            return #body > 0 and json.decode(body) ~= nil
+        end,
         callback = function(resp)
             if not resp.ok then
                 callback(nil, resp.error or "network error")

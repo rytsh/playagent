@@ -108,7 +108,14 @@ function LiveMic:_chunkDone(sample)
         end
         sample:save(path)
         self.queue[#self.queue + 1] = { path = path, tries = 0 }
-        self:_pump()
+        -- upload starts from the next update() frame: HTTP requests must
+        -- not be created inside a sound/system callback
+        self.wantPump = true
+    elseif not had and sample ~= nil and (sample:getLength() or 0) > 0.3
+        and self.state ~= "finishing" then
+        -- a full chunk was recorded but never crossed the level threshold;
+        -- tell the user instead of silently dropping their words
+        self.notice = "(no speech detected - speak up or lower levelThreshold)"
     end
 
     if self.state == "finishing" then
@@ -138,7 +145,7 @@ function LiveMic:_pump()
         if err ~= nil then
             item.tries += 1
             if item.tries < 2 then
-                self:_pump() -- one retry
+                self.wantPump = true -- one retry, from update()
                 return
             end
             table.remove(self.queue, 1)
@@ -152,10 +159,12 @@ function LiveMic:_pump()
                 if #text > 0 then
                     self.text = (#self.text > 0)
                         and (self.text .. " " .. text) or text
+                    self.notice = nil
                 end
             end
         end
-        self:_pump()
+        -- next upload from the update() frame, not this network callback
+        self.wantPump = true
     end, ctx)
 end
 
@@ -226,6 +235,12 @@ function LiveMic:update()
     if self.wantRestart and self.state == "recording" then
         self.wantRestart = false
         self:_startChunk()
+    end
+
+    -- deferred uploads: always start HTTP requests from the update() context
+    if self.wantPump then
+        self.wantPump = false
+        self:_pump()
     end
 
     local cfg = Config.data.stt

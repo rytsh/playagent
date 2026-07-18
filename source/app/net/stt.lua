@@ -98,6 +98,9 @@ function STT.transcribe(wavPath, callback, contextPrompt)
 
     local headers = {
         ["Content-Type"] = "multipart/form-data; boundary=" .. boundary,
+        -- The server closing the connection right after the response keeps
+        -- completion detection reliable (see the MCP client for details).
+        ["Connection"] = "close",
     }
     if #c.key > 0 then
         headers["Authorization"] = "Bearer " .. c.key
@@ -116,6 +119,12 @@ function STT.transcribe(wavPath, callback, contextPrompt)
             path = c.basePath .. "/audio/transcriptions",
             headers = headers,
             body = table.concat(parts),
+            requestTimeout = 45,
+            -- finish as soon as the JSON body is complete instead of
+            -- waiting for socket teardown
+            bodyComplete = function(body)
+                return #body > 0 and json.decode(body) ~= nil
+            end,
             callback = function(resp)
                 if not resp.ok then
                     callback(nil, "STT " .. c.host .. ": "

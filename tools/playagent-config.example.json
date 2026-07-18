@@ -18,7 +18,7 @@
     "ssl": false,
     "basePath": "/v1",
     "key": "",
-    "chunkSeconds": 3,
+    "chunkSeconds": 5,
     "minChunkSeconds": 1.2,
     "silenceMs": 350,
     "levelThreshold": 0.02

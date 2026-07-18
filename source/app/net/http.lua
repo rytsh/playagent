@@ -10,6 +10,8 @@
 --     body = "...",          -- optional string
 --     reason = "...",        -- shown in the system permission dialog
 --     connectTimeout = 15,   -- seconds
+--     requestTimeout = 20,   -- optional overall timeout, seconds
+--     bodyComplete = function(body, headers) return false end, -- optional
 --     callback = function(resp) end,
 -- }
 --
@@ -26,6 +28,7 @@ local DEFAULT_REASON <const> = "PlayAgent needs network access to talk to your A
 local networkWaiters = {}
 local networkDeadline = nil
 local networkError = nil
+local bodyPollers = {}
 
 local function enableNetwork()
     if playdate.network ~= nil and playdate.network.setEnabled ~= nil then
@@ -75,6 +78,15 @@ function Http.ensureAccess()
             finishNetworkWaiters("Wi-Fi: not connected to an access point")
         end
     end
+
+    -- On device, chunked HTTP responses do not always trigger the data
+    -- callback for every chunk. Polling available bytes is non-blocking and
+    -- lets callers recognize a complete body without waiting for a timeout.
+    -- Iterate over a snapshot: completing a request can start the next one,
+    -- which registers a new poller (mutating the table mid-iteration).
+    local polls = {}
+    for poll in pairs(bodyPollers) do polls[#polls + 1] = poll end
+    for _, poll in ipairs(polls) do poll() end
 end
 
 -- Run callback(err) once the device is connected to its configured Wi-Fi
@@ -128,8 +140,11 @@ function Http.request(opts)
 
     local chunks = {}
     local finished = false
+    local timeoutTimer = nil
+    local bodyPoller = nil
+    local finish
 
-    local function drain()
+    local function drain(checkComplete)
         local n = conn:getBytesAvailable()
         while n ~= nil and n > 0 do
             local data = conn:read(math.min(n, 32 * 1024))
@@ -137,28 +152,57 @@ function Http.request(opts)
             chunks[#chunks + 1] = data
             n = conn:getBytesAvailable()
         end
+        if checkComplete and not finished then
+            local headers = conn:getResponseHeaders() or {}
+            local body, done = Http.effectiveBody(table.concat(chunks), headers)
+            if done == true then
+                finish(nil)
+            elseif opts.bodyComplete ~= nil and opts.bodyComplete(body, headers) then
+                finish(nil)
+            end
+        end
     end
 
-    local function finish(errmsg)
+    finish = function(errmsg)
         if finished then return end
         finished = true
-        drain()
+        if timeoutTimer ~= nil then
+            timeoutTimer:remove()
+            timeoutTimer = nil
+        end
+        if bodyPoller ~= nil then
+            bodyPollers[bodyPoller] = nil
+            bodyPoller = nil
+        end
+        drain(false)
         local status = conn:getResponseStatus()
-        local headers = conn:getResponseHeaders()
+        local headers = conn:getResponseHeaders() or {}
         local cerr = errmsg or conn:getError()
         conn:close()
         opts.callback({
             ok = (cerr == nil) and (status ~= nil),
             status = status,
-            headers = headers or {},
-            body = table.concat(chunks),
+            headers = headers,
+            body = (Http.effectiveBody(table.concat(chunks), headers)),
             error = cerr,
         })
     end
 
-    conn:setRequestCallback(drain)
+    conn:setRequestCallback(function() drain(true) end)
     conn:setRequestCompleteCallback(function() finish(nil) end)
     conn:setConnectionClosedCallback(function() finish(nil) end)
+
+    if opts.bodyComplete ~= nil then
+        bodyPoller = function()
+            if not finished then drain(true) end
+        end
+        bodyPollers[bodyPoller] = true
+    end
+
+    if opts.requestTimeout ~= nil then
+        timeoutTimer = playdate.timer.performAfterDelay(opts.requestTimeout * 1000,
+            function() finish("request timed out") end)
+    end
 
     local ok, qerr
     if (opts.method or "GET") == "GET" then
@@ -219,6 +263,48 @@ function Http._streamRequest(conn, opts)
         return nil
     end
     return conn
+end
+
+-- Decode a raw Transfer-Encoding: chunked body. Returns decoded, done.
+-- done is true once the terminating 0-size chunk has been seen.
+function Http.dechunk(raw)
+    local out = {}
+    local pos = 1
+    while true do
+        local s, e, hex = raw:find("^(%x+)[^\r\n]*\r\n", pos)
+        if s == nil then return table.concat(out), false end
+        local size = tonumber(hex, 16)
+        if size == nil then return table.concat(out), false end
+        if size == 0 then return table.concat(out), true end
+        local dataEnd = e + size
+        if #raw < dataEnd then return table.concat(out), false end
+        out[#out + 1] = raw:sub(e + 1, dataEnd)
+        pos = dataEnd + 1
+        if raw:sub(pos, pos + 1) == "\r\n" then
+            pos = pos + 2
+        elseif pos <= #raw then
+            -- malformed / partial chunk boundary; wait for more data
+            return table.concat(out), false
+        else
+            return table.concat(out), false
+        end
+    end
+end
+
+-- The device does not always dechunk HTTP bodies itself. If the response
+-- says chunked and the raw bytes still look chunked, decode them here.
+-- Returns body, done (done = nil when unknown).
+function Http.effectiveBody(raw, headers)
+    local te = Http.header(headers, "Transfer-Encoding") or ""
+    if te:lower():find("chunked") and raw:find("^%x+[^\r\n]*\r\n") then
+        local decoded, done = Http.dechunk(raw)
+        -- Only trust the decoded form once the terminating chunk was seen;
+        -- otherwise keep the raw bytes (avoids mangling misdetected bodies,
+        -- e.g. SSE data that happens to start with hex characters).
+        if done then return decoded, true end
+        return raw, false
+    end
+    return raw, nil
 end
 
 -- Case-insensitive response header lookup.

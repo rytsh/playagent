@@ -30,7 +30,9 @@ local DEFAULTS = {
         key = "",
         -- Live dictation (LiveMic): speech is cut into small chunks that are
         -- transcribed while you keep talking.
-        chunkSeconds = 3,      -- hard upper bound per chunk
+        -- 5s chunks: pauses usually cut earlier; the hard limit only kicks
+        -- in during continuous speech, and longer chunks transcribe better.
+        chunkSeconds = 5,      -- hard upper bound per chunk
         minChunkSeconds = 1.2, -- don't cut before this much audio
         silenceMs = 350,       -- pause length that triggers a cut
         levelThreshold = 0.02, -- mic level below this counts as silence
@@ -72,6 +74,12 @@ function Config.load()
         data.stt.model = "whisper-1"
     end
     deepMerge(data, DEFAULTS)
+    -- Migrate the old live-dictation default: 3s chunks cut words
+    -- mid-syllable. The settings UI never exposed this field, so a stored 3
+    -- can only be the old default.
+    if type(data.stt) == "table" and data.stt.chunkSeconds == 3 then
+        data.stt.chunkSeconds = 5
+    end
     -- datastore JSON round-trip turns empty tables into arrays; make sure
     -- mcpServers is a plain array table.
     if type(data.mcpServers) ~= "table" then data.mcpServers = {} end
