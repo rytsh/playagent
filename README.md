@@ -2,6 +2,8 @@
 
 An LLM agent that runs entirely on your [Playdate](https://play.date).
 
+> Check [releases](https://github.com/rytsh/playagent/releases) for the latest builds, or build from source (requires Playdate SDK 2.7+).
+
 - **OpenAI-compatible chat** — talks to any endpoint speaking the OpenAI
   chat completions protocol (OpenAI, OpenRouter, llama.cpp server, Ollama,
   vLLM, ...), with full tool calling support.
@@ -54,7 +56,15 @@ An LLM agent that runs entirely on your [Playdate](https://play.date).
 > Requires **Playdate OS / SDK 2.7 or newer** (the release that added the
 > `playdate.network` HTTP API).
 
-*(screenshots coming soon)*
+## Screenshots
+
+| Chatting with the agent                                                                            | The talk menu                                                                                |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| ![Chat view: the agent answers a battery question using the device_status tool](assets/talk-1.png) | ![Talk menu: type, speak, dictate live, retry or delete the last message](assets/talk-2.png) |
+
+| Settings                                                        |
+| --------------------------------------------------------------- |
+| ![Settings: API host, model, STT and more](assets/settings.png) |
 
 ## Installing the Playdate SDK on Linux
 
@@ -231,12 +241,12 @@ your PC's LAN IP, the port and the password (username defaults to
 
 ## Controls
 
-| Input        | Action                                        |
-|--------------|-----------------------------------------------|
-| d-pad / crank| navigate menus, scroll the chat               |
-| A            | select / open the talk menu in a chat         |
-| B            | back / cancel                                 |
-| mic          | voice input (A sends, B cancels the recording)|
+| Input         | Action                                         |
+| ------------- | ---------------------------------------------- |
+| d-pad / crank | navigate menus, scroll the chat                |
+| A             | select / open the talk menu in a chat          |
+| B             | back / cancel                                  |
+| mic           | voice input (A sends, B cancels the recording) |
 
 ## Project layout
 
